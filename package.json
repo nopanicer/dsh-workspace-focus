@@ -1,0 +1,63 @@
+{
+  "name": "dsh-workspace-focus",
+  "version": "0.1.0",
+  "description": "Manual workspace focus for the DeepSeek Harness sidebar: one icon button shows only the current workspace’s conversations, and every workspace again.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ]
+    }
+  },
+  "icon": "./icon.svg",
+  "scripts": {
+    "test": "node --test test/smoke.mjs"
+  },
+  "license": "MIT",
+  "author": "nopanicer",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-client-plugin",
+    "sidebar",
+    "workspace",
+    "focus"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nopanicer/dsh-workspace-focus.git"
+  },
+  "homepage": "https://github.com/nopanicer/dsh-workspace-focus#readme",
+  "bugs": {
+    "url": "https://github.com/nopanicer/dsh-workspace-focus/issues"
+  }
+}

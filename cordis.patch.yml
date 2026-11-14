@@ -1,0 +1,8 @@
+# dsh-workspace-focus bundle patch.
+#
+# The bundle inserts one plugin row; the plugin has no Host behavior (empty
+# `apply`), it exists so the bundle has an inventory entry and so the Client
+# half declared in package.json `dsh.client` is mounted.
+- insert:
+    - id: workspace-focus
+      name: '@local/dsh-workspace-focus'
