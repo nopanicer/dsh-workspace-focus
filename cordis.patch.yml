@@ -5,4 +5,4 @@
 # half declared in package.json `dsh.client` is mounted.
 - insert:
     - id: workspace-focus
-      name: '@local/dsh-workspace-focus'
+      name: 'dsh-workspace-focus'

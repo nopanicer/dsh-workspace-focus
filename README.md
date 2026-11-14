@@ -32,10 +32,10 @@
 dsh plugin add dsh-workspace-focus
 ```
 
-**从 GitHub 安装**：
+**从 GitHub 安装**（把仓库地址交给插件管理器）：
 
-```bash
-dsh plugin add github:<你的名字>/dsh-workspace-focus
+```
+install_bundle  github:nopanicer/dsh-workspace-focus
 ```
 
 安装后重启/刷新页面即可在对话区左上角看到按钮。
