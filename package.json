@@ -1,6 +1,6 @@
 {
   "name": "dsh-workspace-focus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Manual workspace focus for the DeepSeek Harness sidebar: one icon button shows only the current workspace’s conversations, and every workspace again.",
   "type": "module",
   "exports": {

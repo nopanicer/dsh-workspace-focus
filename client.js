@@ -68,6 +68,14 @@ window.__ModuleLoader__.load({
     let focusedSnapshot = false;
     const listeners = new Set();
 
+    /**
+     * The filter stylesheet, created once by `apply()` on `document.head`.
+     * It lives outside every slot component on purpose: switching the main
+     * panel (Workspace / Music / Plugins / Automatic tasks / More) unmounts the
+     * conversation header, and the sidebar must stay filtered.
+     */
+    let filterStyle = null;
+
     function getFocused() {
       return focusedSnapshot;
     }
@@ -236,34 +244,39 @@ window.__ModuleLoader__.load({
     function WorkspaceFocusControl(props) {
       const info = useFocusInfo(props);
       const tr = translate(props);
+      const focused = info.focused;
+      const anchorWorkspaceId = info.anchorWorkspaceId;
+
+      /* Keep the plugin-owned stylesheet in step with the focus state. The
+         stylesheet itself outlives this control, so a main-panel switch does
+         not release the filter. */
+      React.useEffect(() => {
+        if (filterStyle === null) return;
+        filterStyle.textContent = focused ? focusCss(anchorWorkspaceId) : '';
+      }, [focused, anchorWorkspaceId]);
 
       if (!info.available) return null;
 
-      const hint = info.focused ? tr('showAllHint') : tr('focusHint');
-      const aria = info.focused ? tr('showAllAria') : tr('focusAria');
+      const hint = focused ? tr('showAllHint') : tr('focusHint');
+      const aria = focused ? tr('showAllAria') : tr('focusAria');
 
       return h(
-        React.Fragment,
-        null,
-        info.focused ? h('style', { 'data-dsh-workspace-focus': '' }, focusCss(info.anchorWorkspaceId)) : null,
-        h(
-          'button',
-          {
-            type: 'button',
-            className: info.focused ? CONTROL_CLASS + ' ' + CONTROL_CLASS + '-active' : CONTROL_CLASS,
-            title: hint,
-            'aria-label': aria,
-            'aria-pressed': info.focused,
-            onMouseDown: (event) => {
-              /* The header is a window drag region; keep the press on the control. */
-              event.stopPropagation();
-            },
-            onClick: () => {
-              setFocused(!info.focused);
-            },
+        'button',
+        {
+          type: 'button',
+          className: focused ? CONTROL_CLASS + ' ' + CONTROL_CLASS + '-active' : CONTROL_CLASS,
+          title: hint,
+          'aria-label': aria,
+          'aria-pressed': focused,
+          onMouseDown: (event) => {
+            /* The header is a window drag region; keep the press on the control. */
+            event.stopPropagation();
           },
-          info.focused ? h(BackIcon) : h(FocusIcon),
-        ),
+          onClick: () => {
+            setFocused(!focused);
+          },
+        },
+        focused ? h(BackIcon) : h(FocusIcon),
       );
     }
 
@@ -285,6 +298,19 @@ window.__ModuleLoader__.load({
         document.head.append(style);
         return () => style.remove();
       }, 'dsh-workspace-focus: control styles');
+
+      /* The filter stylesheet is plugin-scoped, not component-scoped: the
+         sidebar keeps its focus while another main panel is showing. */
+      ctx.effect(() => {
+        const style = document.createElement('style');
+        style.dataset.dshWorkspaceFocus = 'filter';
+        document.head.append(style);
+        filterStyle = style;
+        return () => {
+          if (filterStyle === style) filterStyle = null;
+          style.remove();
+        };
+      }, 'dsh-workspace-focus: filter styles');
 
       ctx.slots.inject('conversation.header.leading', () =>
         ctx.slots.register(

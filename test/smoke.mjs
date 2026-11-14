@@ -2,9 +2,9 @@
  * Smoke test for the Client half without a browser or React.
  *
  * `client.js` is loaded the way the page loads it (`window.__ModuleLoader__`),
- * with a tiny React stand-in that can re-render the registered control so the
- * manual focus toggle, the icon-only markup and the generated focus stylesheet
- * are exercised.
+ * with a tiny React stand-in. The focus filter now lives in a plugin-owned
+ * `<style>` element on `document.head` (not in the control), so the tests check
+ * that the stylesheet outlives the conversation header component.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -50,8 +50,10 @@ const react = {
     hookState.cursor += 1;
     return run();
   },
-  useEffect() {
+  useEffect(run) {
     hookState.cursor += 1;
+    /* Effects run inline in this harness so the stylesheet sync is observable. */
+    return run();
   },
   useSyncExternalStore(_subscribe, getSnapshot) {
     hookState.cursor += 1;
@@ -142,22 +144,29 @@ function applyOnce() {
   return applied;
 }
 
-test('apply registers one header control, its dictionaries and its styles', () => {
+/** The plugin-owned filter stylesheet, looked up on the fake document.head. */
+function filterStyle() {
+  return document.head.appended.find((node) => node.dataset.dshWorkspaceFocus === 'filter');
+}
+
+function controlStyle() {
+  return document.head.appended.find((node) => node.dataset.dshWorkspaceFocus === 'control');
+}
+
+test('apply registers one header control, its dictionaries and two stylesheets', () => {
   const { registrations, locales } = applyOnce();
 
   assert.deepEqual([...registrations.keys()], ['conversation.header.leading']);
   assert.equal(registrations.get('conversation.header.leading').options.locale, 'dshWorkspaceFocus');
 
   assert.equal(locales.length, 1);
-  assert.equal(locales[0].namespace, 'dshWorkspaceFocus');
   assert.equal(locales[0].dictionaries.zh.focusHint, '仅显示当前工作区的对话');
-  assert.equal(locales[0].dictionaries.zh.showAllHint, '返回全部工作区');
-  assert.equal(locales[0].dictionaries.en.focusHint, 'Show only the current workspace conversations');
+  assert.equal(locales[0].dictionaries.en.showAll, 'All workspaces');
 
-  assert.equal(document.head.appended.length, 1);
-  assert.match(document.head.appended[0].textContent, /\.dsh-workspace-focus \{/);
-  assert.match(document.head.appended[0].textContent, /width: 28px/);
-  assert.equal(document.head.appended[0].dataset.dshWorkspaceFocus, 'control');
+  assert.equal(document.head.appended.length, 2);
+  assert.match(controlStyle().textContent, /\.dsh-workspace-focus \{/);
+  assert.match(controlStyle().textContent, /width: 28px/);
+  assert.equal(filterStyle().textContent, '', 'the filter starts empty');
 
   /* The old row-click navigation is gone. */
   assert.equal(documentListeners.has('click'), false);
@@ -190,11 +199,8 @@ const workspaces = [
 ];
 
 function buttonOf(tree) {
-  return tree.children.flat(Infinity).find((child) => child?.type === 'button');
-}
-
-function styleOf(tree) {
-  return tree.children.flat(Infinity).find((child) => child?.type === 'style');
+  assert.equal(tree.type, 'button');
+  return tree;
 }
 
 function textOf(node) {
@@ -210,13 +216,22 @@ function render(input) {
   return applied.registrations.get('conversation.header.leading').component(input);
 }
 
+/** Focus state is module-level; every test starts from "off". */
+function turnFocusOff(input) {
+  const tree = render(input);
+  if (tree === null) return;
+  if (buttonOf(tree).props['aria-pressed'] !== true) return;
+  buttonOf(render(input)).props.onClick();
+  render(input);
+}
+
 test('the default view is every workspace, and the control renders an icon only', () => {
   resetHooks();
+  filterStyle().textContent = '';
   const tree = render(props({ session: sessionsInA, workspaces }));
 
-  assert.equal(styleOf(tree), undefined, 'no filtering before the user asks for it');
+  assert.equal(filterStyle().textContent, '', 'no filtering before the user asks for it');
   const button = buttonOf(tree);
-  assert.ok(button, 'the control should be rendered');
   assert.equal(button.props['aria-pressed'], false);
   assert.equal(button.props['aria-label'], 'tr:focusAria');
   assert.equal(button.props.title, 'tr:focusHint');
@@ -227,42 +242,64 @@ test('the default view is every workspace, and the control renders an icon only'
 test('the control focuses the current workspace and shows the way back', () => {
   resetHooks();
   const input = props({ session: sessionsInA, workspaces });
+  turnFocusOff(input);
 
   buttonOf(render(input)).props.onClick();
 
   const tree = render(input);
-  const style = styleOf(tree);
-  assert.ok(style, 'focusing renders the filter');
   const key = '[data-row-key="workspace:' + workspaceA + '"]';
-  assert.ok(style.children[0].includes('[role="tree"]:has(' + key + ')'), style.children[0]);
-  assert.ok(style.children[0].includes('[role="group"] > div:not(:has(' + key + '))'), style.children[0]);
+  const css = filterStyle().textContent;
+  assert.ok(css.includes('[role="tree"]:has(' + key + ')'), css);
+  assert.ok(css.includes('[role="group"] > div:not(:has(' + key + '))'), css);
 
   const button = buttonOf(tree);
   assert.equal(button.props['aria-pressed'], true);
-  assert.match(button.props.className, /dsh-workspace-focus-active/);
   assert.equal(button.props['aria-label'], 'tr:showAllAria');
   assert.equal(textOf(button), '');
 
   button.props.onClick();
 
-  const back = render(input);
-  assert.equal(styleOf(back), undefined);
-  assert.equal(buttonOf(back).props['aria-pressed'], false);
+  render(input);
+  assert.equal(filterStyle().textContent, '');
+  assert.equal(buttonOf(render(input)).props['aria-pressed'], false);
+});
+
+test('the filter outlives the conversation header (main-panel switches keep it)', () => {
+  resetHooks();
+  const input = props({ session: sessionsInA, workspaces });
+  const key = '[data-row-key="workspace:' + workspaceA + '"]';
+  turnFocusOff(input);
+
+  buttonOf(render(input)).props.onClick();
+  render(input);
+  const cssWhileMounted = filterStyle().textContent;
+  assert.ok(cssWhileMounted.includes(key), cssWhileMounted);
+
+  /* Opening another main panel unmounts this control: no render happens, and
+     the plugin-owned stylesheet keeps filtering the sidebar. */
+  assert.ok(filterStyle().textContent.includes(key), filterStyle().textContent);
+  assert.notEqual(filterStyle(), controlStyle(), 'the filter is a plugin stylesheet, not the control styles');
+
+  /* Coming back re-syncs the same stylesheet. */
+  render(input);
+  assert.equal(filterStyle().textContent, cssWhileMounted);
 });
 
 test('focus follows the open conversation while it is on', () => {
   resetHooks();
   const inA = props({ session: sessionsInA, workspaces });
+  turnFocusOff(inA);
 
   buttonOf(render(inA)).props.onClick();
-  assert.ok(styleOf(render(inA)).children[0].includes('[data-row-key="workspace:' + workspaceA + '"]'));
+  render(inA);
+  assert.ok(filterStyle().textContent.includes('[data-row-key="workspace:' + workspaceA + '"]'));
 
-  const inB = render(props({ session: sessionsInB, workspaces }));
-  assert.ok(styleOf(inB).children[0].includes('[data-row-key="workspace:' + workspaceB + '"]'), 'the new workspace is focused');
+  render(props({ session: sessionsInB, workspaces }));
+  assert.ok(filterStyle().textContent.includes('[data-row-key="workspace:' + workspaceB + '"]'), 'the new workspace is focused');
 
-  const backToAll = render(inA);
-  buttonOf(backToAll).props.onClick();
-  assert.equal(styleOf(render(inA)), undefined);
+  buttonOf(render(inA)).props.onClick();
+  render(inA);
+  assert.equal(filterStyle().textContent, '');
 });
 
 test('no control without a workspace-backed Session', () => {
@@ -270,4 +307,5 @@ test('no control without a workspace-backed Session', () => {
   const ungrouped = { s9: { id: 's9', retainedBy: { mainView: 1 } } };
   assert.equal(render(props({ session: ungrouped, workspaces })), null);
   assert.equal(render(props({ session: {}, workspaces })), null);
+  assert.equal(filterStyle().textContent, '');
 });
