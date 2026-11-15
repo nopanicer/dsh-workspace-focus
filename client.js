@@ -59,6 +59,11 @@ window.__ModuleLoader__.load({
       '.' + CONTROL_CLASS + ' svg { flex: none; }',
       /* The glyph carries the brand color while the sidebar is focused. */
       '.' + CONTROL_CLASS + '-active svg { color: var(--dsw-alias-brand-primary, currentColor); }',
+      /* While the sidebar is folded away the frame overlays its own expand and
+         new-session controls on the header's leading seat; drop our glyph there
+         instead of stacking on top of them. The filter itself stays on, so the
+         sidebar is still focused when it opens again. */
+      '[data-sidebar-collapsed] .' + CONTROL_CLASS + ' { display: none; }',
     ].join('\n');
 
     /* ------------------------------------------------------------------ *

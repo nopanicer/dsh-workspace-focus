@@ -166,6 +166,8 @@ test('apply registers one header control, its dictionaries and two stylesheets',
   assert.equal(document.head.appended.length, 2);
   assert.match(controlStyle().textContent, /\.dsh-workspace-focus \{/);
   assert.match(controlStyle().textContent, /width: 28px/);
+  /* Folded sidebar: the frame's own expand/new-session seat owns that spot. */
+  assert.match(controlStyle().textContent, /\[data-sidebar-collapsed\] \.dsh-workspace-focus \{ display: none; \}/);
   assert.equal(filterStyle().textContent, '', 'the filter starts empty');
 
   /* The old row-click navigation is gone. */
